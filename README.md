@@ -5,6 +5,7 @@ A comprehensive stock analysis tool that evaluates stocks and provides investmen
 ## Features
 - Multi-source data collection (Simply Wall Street, Yahoo Finance)
 - Automated stock comparison with portfolio companies
+- Portfolio import from German broker CSV files (with WKN mapping)
 - Quantitative analysis using OpenAI
 - Investment recommendations based on data-driven insights
 - Caching system for efficient data retrieval
@@ -22,6 +23,10 @@ A comprehensive stock analysis tool that evaluates stocks and provides investmen
      - Historical price data
      - Key financial ratios
      - Market statistics
+   - `Portfolio Import`: Reads German broker CSV files
+     - Supports German number format (comma decimal, dot thousands)
+     - Maps WKN (German securities identification) to international tickers
+     - Extracts portfolio positions and holdings
 
 2. **Data Processing Layer**
    - `DataPreprocessor`: Transforms and combines data
@@ -41,6 +46,57 @@ A comprehensive stock analysis tool that evaluates stocks and provides investmen
    - Tracks data freshness with timestamps
 
 ### Key Components
+
+#### Data Pipeline Map
+```
+Portfolio Data (CSV)                Yahoo Finance                Simply Wall Street
+└── Position Data                  └── Financial Data           └── Company Data
+    ├── WKN                           ├── Price History            ├── Company Info
+    ├── Holdings                      ├── Market Cap               │   ├── Name
+    ├── Entry Price                   ├── P/E Ratio               │   ├── Market Cap
+    ├── Current Price                 ├── EPS                     │   ├── Exchange
+    └── Change %                      ├── Volume                  │   └── Market
+                                     └── Dividends                ├── Financial Metrics
+                                                                 │   ├── ROE
+                                                                 │   ├── D/E Ratio
+                                                                 │   ├── Current Ratio
+                                                                 │   └── Dividend Yield
+                                                                 └── Analysis
+                                                                     ├── Price Target
+                                                                     └── Statements
+
+                                Data Processing
+                                     │
+                            ┌────────┴────────┐
+                            │                 │
+                     Data Combination    Metric Calculation
+                            │                 │
+                            │            ├── Portfolio Averages
+                            │            ├── Performance Metrics
+                            │            └── Risk Metrics
+                            │
+                            └─────────┬─────────┘
+                                     │
+                              OpenAI Analysis
+                                     │
+                            ┌────────┴────────┐
+                            │                 │
+                    Financial Health    Investment Advice
+                            │                 │
+                     ├── Metrics        ├── Recommendation
+                     ├── Comparisons    ├── Risk Assessment
+                     └── Trends         └── Action Items
+
+                              Final Output
+                                   │
+                        ┌─────────┴─────────┐
+                        │                   │
+                    Analysis           Database Cache
+                        │                   │
+                ├── Recommendation      └── JSON Storage
+                ├── Metrics                 └── Timestamp
+                └── Comparisons
+```
 
 #### Database Schema
 ```sql
@@ -82,18 +138,32 @@ Required environment variables:
 
 ## Usage
 
-### Basic Analysis
-Run the analyzer with default settings:
+### Portfolio Analysis
+1. Place your portfolio CSV file as `portfolio.csv` in the root directory
+2. Run the analyzer:
 ```bash
 python src/main.py
 ```
 
+The program supports German broker CSV files with the following features:
+- German number format (comma as decimal, dot as thousands separator)
+- WKN to international ticker mapping
+- Automatic handling of broker-specific CSV structure
+
+Example portfolio.csv format:
+```csv
+Position;Bezeichnung;WKN;ISIN;Notierung;...
+1;ALLIANZ SE NA O.N.;840400;DE0008404005;STK;...
+2;ASML HOLDING    EO -,09;A1J4U4;NL0010273215;STK;...
+```
+
 ### Custom Analysis
-Analyze specific stocks against a custom portfolio:
+Analyze specific stocks against your portfolio:
 ```python
 from src.main import FinancialAnalyzer
 
 analyzer = FinancialAnalyzer()
+# Will use portfolio.csv if available, otherwise falls back to default tickers
 results = analyzer.analyze_stock("NVDA", ["AAPL", "MSFT", "GOOGL"])
 print(results)
 ```
