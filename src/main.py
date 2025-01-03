@@ -1,6 +1,7 @@
 """Main application module for Financial Analyzer."""
 import os
 import json
+import pandas as pd
 from dotenv import load_dotenv
 from typing import List, Dict, Any
 
@@ -9,6 +10,132 @@ from data_collectors.yahoo_finance import YahooFinanceCollector
 from database.db_manager import DatabaseManager
 from preprocessors.data_preprocessor import DataPreprocessor
 from analyzer.openai_analyzer import OpenAIAnalyzer
+
+def load_portfolio_data(file_path: str) -> pd.DataFrame:
+    """Load and process portfolio data from CSV file.
+    
+    Args:
+        file_path: Path to the portfolio CSV file
+        
+    Returns:
+        DataFrame containing processed portfolio data
+    """
+    print("\nReading CSV file...")
+    df = pd.read_csv(
+        file_path,
+        sep=";",
+        skiprows=10,      # Skip the metadata so the row with "Position;Bezeichnung;WKN;..." is the first row read
+        header=0,         # Treat that row as the header
+        skipfooter=7,     # Skip disclaimers at the bottom
+        engine="python",  # Required when using skipfooter
+        decimal=",",      # Interpret commas as decimals
+        thousands=".",    # Interpret dots as thousand separators
+    )
+    
+    # Print raw data for debugging
+    print("\nRaw data - first few rows:")
+    print(df.head())
+    
+    # Print original column names
+    print("\nOriginal column names:")
+    print([f"'{col}'" for col in df.columns.tolist()])
+    
+    # Clean column names by stripping whitespace
+    df.columns = df.columns.str.strip()
+    
+    # Print cleaned column names
+    print("\nCleaned column names:")
+    print([f"'{col}'" for col in df.columns.tolist()])
+    
+    # Fix swapped columns - the actual WKN is in the Bezeichnung column
+    df = df.rename(columns={
+        'Position': 'Bezeichnung_temp',
+        'Bezeichnung': 'WKN',
+        'WKN': 'ISIN_temp'
+    })
+    df['Position'] = df.index + 1
+    
+    # Keep only relevant columns
+    relevant_cols = [
+        "Position",
+        "Bezeichnung_temp",
+        "WKN",
+        "ISIN_temp",
+        "Bestand",
+        "Einstandskurs",
+        "Einstandswert in EUR",
+        "akt. Kurs",
+        "Veränderung in %",
+    ]
+    
+    # Print which relevant columns were found
+    print("\nChecking for relevant columns:")
+    for col in relevant_cols:
+        if col in df.columns:
+            print(f"Found column: '{col}'")
+        else:
+            print(f"Missing column: '{col}'")
+    
+    # Filter out any columns not in relevant_cols (if they exist in df)
+    df = df[[col for col in relevant_cols if col in df.columns]]
+    
+    # Print sample of WKN values
+    print("\nSample of WKN values:")
+    if 'WKN' in df.columns:
+        print(df['WKN'].head())
+    else:
+        print("WKN column not found!")
+    
+    # Convert numeric columns to float
+    numeric_cols = ["Bestand", "Einstandskurs", "Einstandswert in EUR", "akt. Kurs", "Veränderung in %"]
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+            
+    # Drop any rows that don't have a WKN
+    df = df.dropna(subset=["WKN"])
+    
+    return df
+
+def read_portfolio() -> List[str]:
+    """Read portfolio tickers from portfolio.csv file.
+    
+    Returns:
+        List of stock tickers from the portfolio
+    """
+    try:
+        # Load portfolio data
+        df = load_portfolio_data('portfolio.csv')
+        
+        # Create a mapping of WKN to tickers
+        wkn_to_ticker = {
+            '840400': 'ALV.DE',    # Allianz SE
+            'A1J4U4': 'ASML.AS',   # ASML Holding
+            '863186': 'AMD',       # Advanced Micro Devices
+            'A14Y6H': 'GOOG',      # Alphabet Inc. Class C
+            'A0YJQ2': 'BRK-B',     # Berkshire Hathaway B
+            'A2PK2R': 'CRWD',      # Crowdstrike Holdings
+            '870747': 'MSFT',      # Microsoft
+            'A2ACQE': 'NTNX',      # Nutanix Inc.
+            '918422': 'NVDA',      # NVIDIA Corp
+            '909800': 'TSM',       # Taiwan Semiconductor ADR
+            'A1CX3T': 'TSLA'       # Tesla Inc.
+        }
+        
+        # Extract tickers from WKN
+        tickers = []
+        for _, row in df.iterrows():
+            wkn = row['WKN'].strip()
+            if wkn in wkn_to_ticker:
+                tickers.append(wkn_to_ticker[wkn])
+            else:
+                print(f"Warning: Could not find ticker for WKN {wkn}")
+        
+        print(f"Found {len(tickers)} stocks in portfolio: {tickers}")
+        return tickers
+    except Exception as e:
+        print(f"Error reading portfolio: {str(e)}")
+        return []
 
 class FinancialAnalyzer:
     def __init__(self):
@@ -121,10 +248,16 @@ def main():
     """Main entry point."""
     analyzer = FinancialAnalyzer()
     
-    # Example usage
-    ticker = "NVDA"
-    portfolio = ["AAPL", "MSFT", "GOOGL"]
+    # Get portfolio tickers
+    portfolio = read_portfolio()
+    if not portfolio:
+        print("Error: Could not read portfolio. Using default tickers.")
+        portfolio = ["AAPL", "MSFT", "GOOGL"]
     
+    print("\nAnalyzing against portfolio stocks:", portfolio)
+    
+    # Example usage - analyze NVIDIA against portfolio
+    ticker = "NVDA"
     results = analyzer.analyze_stock(ticker, portfolio)
     print("\nAnalysis Results:")
     print("=" * 50)

@@ -1,11 +1,13 @@
 """OpenAI-powered stock analysis module."""
 import os
-from openai import OpenAI
+import openai
 from typing import Dict, Any
 
 class OpenAIAnalyzer:
     def __init__(self):
-        self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        openai.api_key = os.getenv('OPENAI_API_KEY')
+        if not openai.api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is not set")
         
     def analyze_stock(self, processed_data: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze stock data using OpenAI.
@@ -21,7 +23,7 @@ class OpenAIAnalyzer:
         
         try:
             # Get analysis from OpenAI
-            response = self.client.chat.completions.create(
+            response = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are a financial analyst expert. Analyze the given stock data and provide a detailed recommendation."},

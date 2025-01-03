@@ -17,9 +17,16 @@ class YahooFinanceCollector:
             stock = yf.Ticker(ticker)
             
             # Convert DataFrames to dict and handle timestamps
-            financials = stock.financials.to_dict()
-            balance_sheet = stock.balance_sheet.to_dict()
-            cash_flow = stock.cashflow.to_dict()
+            financials = stock.financials.to_dict() if stock.financials is not None else {}
+            balance_sheet = stock.balance_sheet.to_dict() if stock.balance_sheet is not None else {}
+            cash_flow = stock.cashflow.to_dict() if stock.cashflow is not None else {}
+            
+            # Get basic info
+            info = {}
+            try:
+                info = stock.info
+            except Exception as e:
+                print(f"Error fetching info for {ticker}: {str(e)}")
             
             # Convert all timestamps in the dictionaries to strings
             financials = self._convert_timestamps(financials)
@@ -27,7 +34,7 @@ class YahooFinanceCollector:
             cash_flow = self._convert_timestamps(cash_flow)
             
             return {
-                'info': stock.info,
+                'info': info,
                 'financials': financials,
                 'balance_sheet': balance_sheet,
                 'cash_flow': cash_flow
